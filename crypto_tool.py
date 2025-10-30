@@ -841,6 +841,8 @@ class CryptoTool(QMainWindow):
             
             elif mode == "ECB":
                 # ECB mode - no IV needed
+                # WARNING: ECB is insecure and included only for educational purposes
+                # Do not use ECB in production - use CBC, CTR, GCM, or CCM instead
                 cipher = Cipher(algorithms.AES(key), modes.ECB(), backend=default_backend())
                 encryptor = cipher.encryptor()
                 
@@ -850,7 +852,7 @@ class CryptoTool(QMainWindow):
                 
                 ciphertext = encryptor.update(padded_plaintext) + encryptor.finalize()
                 result_hex = ciphertext.hex()
-                self.sym_output.setText(f"✓ Encryption successful (AES-ECB)\n\nCiphertext (HEX):\n{result_hex}")
+                self.sym_output.setText(f"✓ Encryption successful (AES-ECB)\n\n⚠️ WARNING: ECB mode is insecure\n\nCiphertext (HEX):\n{result_hex}")
             
             elif mode == "CFB":
                 # Generate random IV
@@ -977,6 +979,7 @@ class CryptoTool(QMainWindow):
             
             elif mode == "ECB":
                 # ECB mode - no IV
+                # WARNING: ECB is insecure and included only for educational purposes
                 ciphertext = data
                 
                 cipher = Cipher(algorithms.AES(key), modes.ECB(), backend=default_backend())

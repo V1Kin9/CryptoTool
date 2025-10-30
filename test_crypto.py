@@ -137,7 +137,7 @@ def test_cipher_modes():
         key = os.urandom(32)
         plaintext = b"Test message for cipher modes"
         
-        # Test ECB
+        # Test ECB (WARNING: ECB is insecure, included only for testing/educational purposes)
         cipher = Cipher(algorithms.AES(key), modes.ECB(), backend=default_backend())
         encryptor = cipher.encryptor()
         padder = crypto_padding.PKCS7(128).padder()
