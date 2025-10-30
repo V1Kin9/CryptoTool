@@ -56,6 +56,7 @@ class CryptoTool(QMainWindow):
         tabs.addTab(self.create_key_gen_tab(), "Key Generation")
         tabs.addTab(self.create_key_exchange_tab(), "Key Exchange")
         tabs.addTab(self.create_hash_tab(), "Hash Functions")
+        tabs.addTab(self.create_data_format_tab(), "Data Format")
     
     def create_symmetric_tab(self):
         """Create symmetric encryption/decryption tab"""
@@ -75,12 +76,12 @@ class CryptoTool(QMainWindow):
         layout.addWidget(algo_group)
         
         # Key input
-        key_group = QGroupBox("Key (Base64 encoded, 32 bytes for AES-256)")
+        key_group = QGroupBox("Key (HEX format, 64 hex characters for AES-256)")
         key_layout = QVBoxLayout()
         key_group.setLayout(key_layout)
         
         self.sym_key_input = QLineEdit()
-        self.sym_key_input.setPlaceholderText("Enter key or generate one")
+        self.sym_key_input.setPlaceholderText("Enter key in HEX format or generate one")
         key_layout.addWidget(self.sym_key_input)
         
         key_btn_layout = QHBoxLayout()
@@ -105,7 +106,7 @@ class CryptoTool(QMainWindow):
         plain_group.setLayout(plain_layout)
         
         self.sym_plaintext = QTextEdit()
-        self.sym_plaintext.setPlaceholderText("Enter plaintext or ciphertext (Base64 for decrypt)")
+        self.sym_plaintext.setPlaceholderText("Enter plaintext or ciphertext (HEX for decrypt)")
         plain_layout.addWidget(self.sym_plaintext)
         layout.addWidget(plain_group)
         
@@ -159,7 +160,7 @@ class CryptoTool(QMainWindow):
         msg_group.setLayout(msg_layout)
         
         self.asym_message = QTextEdit()
-        self.asym_message.setPlaceholderText("Enter message to encrypt or Base64 ciphertext to decrypt")
+        self.asym_message.setPlaceholderText("Enter message to encrypt or HEX ciphertext to decrypt")
         msg_layout.addWidget(self.asym_message)
         layout.addWidget(msg_group)
         
@@ -218,7 +219,7 @@ class CryptoTool(QMainWindow):
         layout.addWidget(msg_group)
         
         # Signature input
-        sig_group = QGroupBox("Signature (Base64)")
+        sig_group = QGroupBox("Signature (HEX)")
         sig_layout = QVBoxLayout()
         sig_group.setLayout(sig_layout)
         
@@ -352,9 +353,9 @@ class CryptoTool(QMainWindow):
         dh_layout.addWidget(self.dh_public_display)
         
         # Peer public key input
-        dh_layout.addWidget(QLabel("Peer's Public Key (Base64):"))
+        dh_layout.addWidget(QLabel("Peer's Public Key (HEX):"))
         self.dh_peer_public = QTextEdit()
-        self.dh_peer_public.setPlaceholderText("Paste peer's public key here")
+        self.dh_peer_public.setPlaceholderText("Paste peer's public key here (HEX format)")
         self.dh_peer_public.setMaximumHeight(100)
         dh_layout.addWidget(self.dh_peer_public)
         
@@ -365,7 +366,7 @@ class CryptoTool(QMainWindow):
         layout.addWidget(dh_group)
         
         # Output
-        output_group = QGroupBox("Shared Secret (Base64)")
+        output_group = QGroupBox("Shared Secret (HEX)")
         output_layout = QVBoxLayout()
         output_group.setLayout(output_layout)
         
@@ -427,13 +428,96 @@ class CryptoTool(QMainWindow):
         
         return widget
     
+    def create_data_format_tab(self):
+        """Create data format handling tab"""
+        widget = QWidget()
+        layout = QVBoxLayout()
+        widget.setLayout(layout)
+        
+        # Format conversion section
+        convert_group = QGroupBox("Format Conversion")
+        convert_layout = QVBoxLayout()
+        convert_group.setLayout(convert_layout)
+        
+        # Source format selection
+        source_layout = QHBoxLayout()
+        source_layout.addWidget(QLabel("Source Format:"))
+        self.format_source_combo = QComboBox()
+        self.format_source_combo.addItems(["HEX", "Base64", "Text"])
+        source_layout.addWidget(self.format_source_combo)
+        convert_layout.addLayout(source_layout)
+        
+        # Input
+        convert_layout.addWidget(QLabel("Input:"))
+        self.format_input = QTextEdit()
+        self.format_input.setPlaceholderText("Enter data to convert")
+        self.format_input.setMaximumHeight(150)
+        convert_layout.addWidget(self.format_input)
+        
+        # Target format selection
+        target_layout = QHBoxLayout()
+        target_layout.addWidget(QLabel("Target Format:"))
+        self.format_target_combo = QComboBox()
+        self.format_target_combo.addItems(["HEX", "Base64", "Text"])
+        target_layout.addWidget(self.format_target_combo)
+        convert_layout.addLayout(target_layout)
+        
+        # Convert button
+        convert_btn = QPushButton("Convert")
+        convert_btn.clicked.connect(self.convert_format)
+        convert_layout.addWidget(convert_btn)
+        
+        layout.addWidget(convert_group)
+        
+        # HEX prefix management section
+        prefix_group = QGroupBox("HEX Prefix Management")
+        prefix_layout = QVBoxLayout()
+        prefix_group.setLayout(prefix_layout)
+        
+        prefix_layout.addWidget(QLabel("HEX Data:"))
+        self.prefix_input = QTextEdit()
+        self.prefix_input.setPlaceholderText("Enter HEX data (with or without 0x prefix)")
+        self.prefix_input.setMaximumHeight(100)
+        prefix_layout.addWidget(self.prefix_input)
+        
+        # Prefix buttons
+        prefix_btn_layout = QHBoxLayout()
+        add_prefix_btn = QPushButton("Add '0x' Prefix")
+        add_prefix_btn.clicked.connect(self.add_hex_prefix)
+        prefix_btn_layout.addWidget(add_prefix_btn)
+        
+        remove_prefix_btn = QPushButton("Remove '0x' Prefix")
+        remove_prefix_btn.clicked.connect(self.remove_hex_prefix)
+        prefix_btn_layout.addWidget(remove_prefix_btn)
+        
+        prefix_layout.addLayout(prefix_btn_layout)
+        layout.addWidget(prefix_group)
+        
+        # Output section
+        output_group = QGroupBox("Output")
+        output_layout = QVBoxLayout()
+        output_group.setLayout(output_layout)
+        
+        self.format_output = QTextEdit()
+        self.format_output.setReadOnly(True)
+        output_layout.addWidget(self.format_output)
+        
+        # Clear button
+        clear_btn = QPushButton("Clear All")
+        clear_btn.clicked.connect(lambda: (self.format_input.clear(), self.prefix_input.clear(), self.format_output.clear()))
+        output_layout.addWidget(clear_btn)
+        
+        layout.addWidget(output_group)
+        
+        return widget
+    
     # Symmetric encryption methods
     def generate_symmetric_key(self):
         """Generate a random symmetric key"""
         try:
             key = os.urandom(32)  # 256 bits
-            key_b64 = base64.b64encode(key).decode()
-            self.sym_key_input.setText(key_b64)
+            key_hex = key.hex()
+            self.sym_key_input.setText(key_hex)
             self.sym_output.setText("✓ Generated new 256-bit key")
         except Exception as e:
             QMessageBox.critical(self, "Error", f"Failed to generate key: {str(e)}")
@@ -442,13 +526,18 @@ class CryptoTool(QMainWindow):
         """Encrypt plaintext using symmetric encryption"""
         try:
             # Get key
-            key_b64 = self.sym_key_input.text().strip()
-            if not key_b64:
+            key_hex = self.sym_key_input.text().strip()
+            if not key_hex:
                 raise ValueError("Please enter or generate a key")
             
-            key = base64.b64decode(key_b64)
+            # Remove any whitespace and optional 0x prefix
+            key_hex = key_hex.replace(" ", "")
+            if key_hex.lower().startswith("0x"):
+                key_hex = key_hex[2:]
+            
+            key = bytes.fromhex(key_hex)
             if len(key) != 32:
-                raise ValueError("Key must be 32 bytes (256 bits)")
+                raise ValueError("Key must be 32 bytes (64 hex characters)")
             
             # Get plaintext
             plaintext = self.sym_plaintext.toPlainText().encode()
@@ -471,7 +560,7 @@ class CryptoTool(QMainWindow):
                 
                 # Combine IV and ciphertext
                 result = iv + ciphertext
-                result_b64 = base64.b64encode(result).decode()
+                result_hex = result.hex()
                 
             elif algo == "AES-256-GCM":
                 # Generate random nonce
@@ -483,9 +572,9 @@ class CryptoTool(QMainWindow):
                 
                 # Combine nonce, ciphertext, and tag
                 result = nonce + ciphertext + encryptor.tag
-                result_b64 = base64.b64encode(result).decode()
+                result_hex = result.hex()
             
-            self.sym_output.setText(f"✓ Encryption successful\n\nCiphertext (Base64):\n{result_b64}")
+            self.sym_output.setText(f"✓ Encryption successful\n\nCiphertext (HEX):\n{result_hex}")
             
         except Exception as e:
             QMessageBox.critical(self, "Error", f"Encryption failed: {str(e)}")
@@ -495,20 +584,30 @@ class CryptoTool(QMainWindow):
         """Decrypt ciphertext using symmetric encryption"""
         try:
             # Get key
-            key_b64 = self.sym_key_input.text().strip()
-            if not key_b64:
+            key_hex = self.sym_key_input.text().strip()
+            if not key_hex:
                 raise ValueError("Please enter or generate a key")
             
-            key = base64.b64decode(key_b64)
+            # Remove any whitespace and optional 0x prefix
+            key_hex = key_hex.replace(" ", "")
+            if key_hex.lower().startswith("0x"):
+                key_hex = key_hex[2:]
+            
+            key = bytes.fromhex(key_hex)
             if len(key) != 32:
-                raise ValueError("Key must be 32 bytes (256 bits)")
+                raise ValueError("Key must be 32 bytes (64 hex characters)")
             
             # Get ciphertext
-            ciphertext_b64 = self.sym_plaintext.toPlainText().strip()
-            if not ciphertext_b64:
+            ciphertext_hex = self.sym_plaintext.toPlainText().strip()
+            if not ciphertext_hex:
                 raise ValueError("Please enter ciphertext")
             
-            data = base64.b64decode(ciphertext_b64)
+            # Remove any whitespace and optional 0x prefix
+            ciphertext_hex = ciphertext_hex.replace(" ", "").replace("\n", "")
+            if ciphertext_hex.lower().startswith("0x"):
+                ciphertext_hex = ciphertext_hex[2:]
+            
+            data = bytes.fromhex(ciphertext_hex)
             algo = self.sym_algo_combo.currentText()
             
             if algo == "AES-256-CBC":
@@ -688,8 +787,8 @@ class CryptoTool(QMainWindow):
                 )
             )
             
-            ciphertext_b64 = base64.b64encode(ciphertext).decode()
-            self.asym_output.setText(f"✓ Encryption successful\n\nCiphertext (Base64):\n{ciphertext_b64}")
+            ciphertext_hex = ciphertext.hex()
+            self.asym_output.setText(f"✓ Encryption successful\n\nCiphertext (HEX):\n{ciphertext_hex}")
             
         except Exception as e:
             QMessageBox.critical(self, "Error", f"Encryption failed: {str(e)}")
@@ -701,11 +800,16 @@ class CryptoTool(QMainWindow):
             if not self.rsa_private_key:
                 raise ValueError("No private key loaded. Generate or load keys first.")
             
-            ciphertext_b64 = self.asym_message.toPlainText().strip()
-            if not ciphertext_b64:
+            ciphertext_hex = self.asym_message.toPlainText().strip()
+            if not ciphertext_hex:
                 raise ValueError("Please enter ciphertext")
             
-            ciphertext = base64.b64decode(ciphertext_b64)
+            # Remove any whitespace and optional 0x prefix
+            ciphertext_hex = ciphertext_hex.replace(" ", "").replace("\n", "")
+            if ciphertext_hex.lower().startswith("0x"):
+                ciphertext_hex = ciphertext_hex[2:]
+            
+            ciphertext = bytes.fromhex(ciphertext_hex)
             
             plaintext = self.rsa_private_key.decrypt(
                 ciphertext,
@@ -743,8 +847,8 @@ class CryptoTool(QMainWindow):
                 hashes.SHA256()
             )
             
-            signature_b64 = base64.b64encode(signature).decode()
-            self.sig_signature.setText(signature_b64)
+            signature_hex = signature.hex()
+            self.sig_signature.setText(signature_hex)
             self.sig_output.setText("✓ Message signed successfully")
             
         except Exception as e:
@@ -761,11 +865,16 @@ class CryptoTool(QMainWindow):
             if not message:
                 raise ValueError("Please enter a message")
             
-            signature_b64 = self.sig_signature.toPlainText().strip()
-            if not signature_b64:
+            signature_hex = self.sig_signature.toPlainText().strip()
+            if not signature_hex:
                 raise ValueError("Please enter a signature")
             
-            signature = base64.b64decode(signature_b64)
+            # Remove any whitespace and optional 0x prefix
+            signature_hex = signature_hex.replace(" ", "").replace("\n", "")
+            if signature_hex.lower().startswith("0x"):
+                signature_hex = signature_hex[2:]
+            
+            signature = bytes.fromhex(signature_hex)
             
             self.rsa_public_key.verify(
                 signature,
@@ -806,8 +915,8 @@ class CryptoTool(QMainWindow):
                 format=serialization.PublicFormat.SubjectPublicKeyInfo
             )
             
-            public_b64 = base64.b64encode(public_bytes).decode()
-            self.dh_public_display.setText(public_b64)
+            public_hex = public_bytes.hex()
+            self.dh_public_display.setText(public_hex)
             self.dh_output.setText(f"✓ Generated {key_size}-bit DH key pair")
             
         except Exception as e:
@@ -820,20 +929,25 @@ class CryptoTool(QMainWindow):
             if not self.dh_private_key:
                 raise ValueError("Generate your DH keys first")
             
-            peer_public_b64 = self.dh_peer_public.toPlainText().strip()
-            if not peer_public_b64:
+            peer_public_hex = self.dh_peer_public.toPlainText().strip()
+            if not peer_public_hex:
                 raise ValueError("Please enter peer's public key")
             
-            peer_public_bytes = base64.b64decode(peer_public_b64)
+            # Remove any whitespace and optional 0x prefix
+            peer_public_hex = peer_public_hex.replace(" ", "").replace("\n", "")
+            if peer_public_hex.lower().startswith("0x"):
+                peer_public_hex = peer_public_hex[2:]
+            
+            peer_public_bytes = bytes.fromhex(peer_public_hex)
             peer_public_key = serialization.load_pem_public_key(
                 peer_public_bytes,
                 backend=default_backend()
             )
             
             shared_secret = self.dh_private_key.exchange(peer_public_key)
-            shared_secret_b64 = base64.b64encode(shared_secret).decode()
+            shared_secret_hex = shared_secret.hex()
             
-            self.dh_output.setText(f"✓ Shared secret computed\n\nShared Secret (Base64):\n{shared_secret_b64}\n\nYou can use this as a key for symmetric encryption.")
+            self.dh_output.setText(f"✓ Shared secret computed\n\nShared Secret (HEX):\n{shared_secret_hex}\n\nYou can use this as a key for symmetric encryption.")
             
         except Exception as e:
             QMessageBox.critical(self, "Error", f"Failed to compute shared secret: {str(e)}")
@@ -869,6 +983,102 @@ class CryptoTool(QMainWindow):
         except Exception as e:
             QMessageBox.critical(self, "Error", f"Hash computation failed: {str(e)}")
             self.hash_output.setText(f"✗ Error: {str(e)}")
+    
+    # Data format handling methods
+    def convert_format(self):
+        """Convert between different data formats"""
+        try:
+            input_data = self.format_input.toPlainText().strip()
+            if not input_data:
+                raise ValueError("Please enter data to convert")
+            
+            source_format = self.format_source_combo.currentText()
+            target_format = self.format_target_combo.currentText()
+            
+            # Convert source to bytes
+            if source_format == "HEX":
+                # Remove any whitespace and optional 0x prefix
+                hex_data = input_data.replace(" ", "").replace("\n", "")
+                if hex_data.lower().startswith("0x"):
+                    hex_data = hex_data[2:]
+                try:
+                    data_bytes = bytes.fromhex(hex_data)
+                except ValueError:
+                    raise ValueError("Invalid HEX format")
+            elif source_format == "Base64":
+                try:
+                    data_bytes = base64.b64decode(input_data)
+                except Exception:
+                    raise ValueError("Invalid Base64 format")
+            elif source_format == "Text":
+                data_bytes = input_data.encode('utf-8')
+            
+            # Convert bytes to target format
+            if target_format == "HEX":
+                result = data_bytes.hex()
+            elif target_format == "Base64":
+                result = base64.b64encode(data_bytes).decode()
+            elif target_format == "Text":
+                try:
+                    result = data_bytes.decode('utf-8')
+                except UnicodeDecodeError:
+                    raise ValueError("Cannot decode data as text (not valid UTF-8)")
+            
+            self.format_output.setText(f"✓ Conversion successful\n\n{result}")
+            
+        except Exception as e:
+            QMessageBox.critical(self, "Error", f"Conversion failed: {str(e)}")
+            self.format_output.setText(f"✗ Error: {str(e)}")
+    
+    def add_hex_prefix(self):
+        """Add 0x prefix to HEX data"""
+        try:
+            input_data = self.prefix_input.toPlainText().strip()
+            if not input_data:
+                raise ValueError("Please enter HEX data")
+            
+            # Remove existing prefix if any
+            hex_data = input_data.replace(" ", "").replace("\n", "")
+            if hex_data.lower().startswith("0x"):
+                hex_data = hex_data[2:]
+            
+            # Validate hex
+            try:
+                bytes.fromhex(hex_data)
+            except ValueError:
+                raise ValueError("Invalid HEX format")
+            
+            result = "0x" + hex_data
+            self.format_output.setText(f"✓ Prefix added\n\n{result}")
+            
+        except Exception as e:
+            QMessageBox.critical(self, "Error", f"Failed to add prefix: {str(e)}")
+            self.format_output.setText(f"✗ Error: {str(e)}")
+    
+    def remove_hex_prefix(self):
+        """Remove 0x prefix from HEX data"""
+        try:
+            input_data = self.prefix_input.toPlainText().strip()
+            if not input_data:
+                raise ValueError("Please enter HEX data")
+            
+            hex_data = input_data.replace(" ", "").replace("\n", "")
+            
+            # Remove prefix if exists
+            if hex_data.lower().startswith("0x"):
+                hex_data = hex_data[2:]
+            
+            # Validate hex
+            try:
+                bytes.fromhex(hex_data)
+            except ValueError:
+                raise ValueError("Invalid HEX format")
+            
+            self.format_output.setText(f"✓ Prefix removed\n\n{hex_data}")
+            
+        except Exception as e:
+            QMessageBox.critical(self, "Error", f"Failed to remove prefix: {str(e)}")
+            self.format_output.setText(f"✗ Error: {str(e)}")
     
     # Utility methods
     def save_to_file(self, data, file_type):
