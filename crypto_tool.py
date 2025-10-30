@@ -504,7 +504,7 @@ class CryptoTool(QMainWindow):
         
         # Clear button
         clear_btn = QPushButton("Clear All")
-        clear_btn.clicked.connect(lambda: (self.format_input.clear(), self.prefix_input.clear(), self.format_output.clear()))
+        clear_btn.clicked.connect(self.clear_format_fields)
         output_layout.addWidget(clear_btn)
         
         layout.addWidget(output_group)
@@ -530,10 +530,8 @@ class CryptoTool(QMainWindow):
             if not key_hex:
                 raise ValueError("Please enter or generate a key")
             
-            # Remove any whitespace and optional 0x prefix
-            key_hex = key_hex.replace(" ", "")
-            if key_hex.lower().startswith("0x"):
-                key_hex = key_hex[2:]
+            # Clean hex input
+            key_hex = self.clean_hex_input(key_hex)
             
             key = bytes.fromhex(key_hex)
             if len(key) != 32:
@@ -588,10 +586,8 @@ class CryptoTool(QMainWindow):
             if not key_hex:
                 raise ValueError("Please enter or generate a key")
             
-            # Remove any whitespace and optional 0x prefix
-            key_hex = key_hex.replace(" ", "")
-            if key_hex.lower().startswith("0x"):
-                key_hex = key_hex[2:]
+            # Clean hex input
+            key_hex = self.clean_hex_input(key_hex)
             
             key = bytes.fromhex(key_hex)
             if len(key) != 32:
@@ -602,10 +598,8 @@ class CryptoTool(QMainWindow):
             if not ciphertext_hex:
                 raise ValueError("Please enter ciphertext")
             
-            # Remove any whitespace and optional 0x prefix
-            ciphertext_hex = ciphertext_hex.replace(" ", "").replace("\n", "")
-            if ciphertext_hex.lower().startswith("0x"):
-                ciphertext_hex = ciphertext_hex[2:]
+            # Clean hex input
+            ciphertext_hex = self.clean_hex_input(ciphertext_hex)
             
             data = bytes.fromhex(ciphertext_hex)
             algo = self.sym_algo_combo.currentText()
@@ -804,10 +798,8 @@ class CryptoTool(QMainWindow):
             if not ciphertext_hex:
                 raise ValueError("Please enter ciphertext")
             
-            # Remove any whitespace and optional 0x prefix
-            ciphertext_hex = ciphertext_hex.replace(" ", "").replace("\n", "")
-            if ciphertext_hex.lower().startswith("0x"):
-                ciphertext_hex = ciphertext_hex[2:]
+            # Clean hex input
+            ciphertext_hex = self.clean_hex_input(ciphertext_hex)
             
             ciphertext = bytes.fromhex(ciphertext_hex)
             
@@ -869,10 +861,8 @@ class CryptoTool(QMainWindow):
             if not signature_hex:
                 raise ValueError("Please enter a signature")
             
-            # Remove any whitespace and optional 0x prefix
-            signature_hex = signature_hex.replace(" ", "").replace("\n", "")
-            if signature_hex.lower().startswith("0x"):
-                signature_hex = signature_hex[2:]
+            # Clean hex input
+            signature_hex = self.clean_hex_input(signature_hex)
             
             signature = bytes.fromhex(signature_hex)
             
@@ -933,10 +923,8 @@ class CryptoTool(QMainWindow):
             if not peer_public_hex:
                 raise ValueError("Please enter peer's public key")
             
-            # Remove any whitespace and optional 0x prefix
-            peer_public_hex = peer_public_hex.replace(" ", "").replace("\n", "")
-            if peer_public_hex.lower().startswith("0x"):
-                peer_public_hex = peer_public_hex[2:]
+            # Clean hex input
+            peer_public_hex = self.clean_hex_input(peer_public_hex)
             
             peer_public_bytes = bytes.fromhex(peer_public_hex)
             peer_public_key = serialization.load_pem_public_key(
@@ -997,10 +985,8 @@ class CryptoTool(QMainWindow):
             
             # Convert source to bytes
             if source_format == "HEX":
-                # Remove any whitespace and optional 0x prefix
-                hex_data = input_data.replace(" ", "").replace("\n", "")
-                if hex_data.lower().startswith("0x"):
-                    hex_data = hex_data[2:]
+                # Clean hex input
+                hex_data = self.clean_hex_input(input_data)
                 try:
                     data_bytes = bytes.fromhex(hex_data)
                 except ValueError:
@@ -1038,9 +1024,8 @@ class CryptoTool(QMainWindow):
                 raise ValueError("Please enter HEX data")
             
             # Remove existing prefix if any
-            hex_data = input_data.replace(" ", "").replace("\n", "")
-            if hex_data.lower().startswith("0x"):
-                hex_data = hex_data[2:]
+            # Clean hex input
+            hex_data = self.clean_hex_input(input_data)
             
             # Validate hex
             try:
@@ -1062,11 +1047,8 @@ class CryptoTool(QMainWindow):
             if not input_data:
                 raise ValueError("Please enter HEX data")
             
-            hex_data = input_data.replace(" ", "").replace("\n", "")
-            
-            # Remove prefix if exists
-            if hex_data.lower().startswith("0x"):
-                hex_data = hex_data[2:]
+            # Clean hex input
+            hex_data = self.clean_hex_input(input_data)
             
             # Validate hex
             try:
@@ -1081,6 +1063,19 @@ class CryptoTool(QMainWindow):
             self.format_output.setText(f"✗ Error: {str(e)}")
     
     # Utility methods
+    def clean_hex_input(self, hex_string):
+        """Clean HEX input by removing whitespace and optional 0x prefix"""
+        hex_clean = hex_string.replace(" ", "").replace("\n", "")
+        if hex_clean.lower().startswith("0x"):
+            hex_clean = hex_clean[2:]
+        return hex_clean
+    
+    def clear_format_fields(self):
+        """Clear all fields in the Data Format tab"""
+        self.format_input.clear()
+        self.prefix_input.clear()
+        self.format_output.clear()
+    
     def save_to_file(self, data, file_type):
         """Save data to file"""
         try:
