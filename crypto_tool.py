@@ -14,7 +14,7 @@ from PyQt5.QtWidgets import (
 from PyQt5.QtCore import Qt
 
 from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes
-from cryptography.hazmat.primitives import hashes, serialization
+from cryptography.hazmat.primitives import hashes, serialization, padding as crypto_padding
 from cryptography.hazmat.primitives.asymmetric import rsa, padding, dh
 from cryptography.hazmat.primitives.kdf.pbkdf2 import PBKDF2HMAC
 from cryptography.hazmat.backends import default_backend
@@ -463,11 +463,11 @@ class CryptoTool(QMainWindow):
                 cipher = Cipher(algorithms.AES(key), modes.CBC(iv), backend=default_backend())
                 encryptor = cipher.encryptor()
                 
-                # Pad plaintext to block size
-                pad_length = 16 - (len(plaintext) % 16)
-                plaintext += bytes([pad_length] * pad_length)
+                # Pad plaintext to block size using PKCS7 padding
+                padder = crypto_padding.PKCS7(128).padder()
+                padded_plaintext = padder.update(plaintext) + padder.finalize()
                 
-                ciphertext = encryptor.update(plaintext) + encryptor.finalize()
+                ciphertext = encryptor.update(padded_plaintext) + encryptor.finalize()
                 
                 # Combine IV and ciphertext
                 result = iv + ciphertext
@@ -521,11 +521,11 @@ class CryptoTool(QMainWindow):
                 cipher = Cipher(algorithms.AES(key), modes.CBC(iv), backend=default_backend())
                 decryptor = cipher.decryptor()
                 
-                plaintext = decryptor.update(ciphertext) + decryptor.finalize()
+                padded_plaintext = decryptor.update(ciphertext) + decryptor.finalize()
                 
-                # Remove padding
-                pad_length = plaintext[-1]
-                plaintext = plaintext[:-pad_length]
+                # Remove padding using PKCS7 unpadder
+                unpadder = crypto_padding.PKCS7(128).unpadder()
+                plaintext = unpadder.update(padded_plaintext) + unpadder.finalize()
                 
             elif algo == "AES-256-GCM":
                 if len(data) < 28:  # 12 (nonce) + 16 (tag)

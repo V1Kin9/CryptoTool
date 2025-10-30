@@ -7,7 +7,7 @@ Tests all cryptographic operations without GUI
 import sys
 import base64
 from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes
-from cryptography.hazmat.primitives import hashes, serialization
+from cryptography.hazmat.primitives import hashes, serialization, padding as crypto_padding
 from cryptography.hazmat.primitives.asymmetric import rsa, padding, dh
 from cryptography.hazmat.backends import default_backend
 import os
@@ -26,20 +26,20 @@ def test_symmetric_encryption():
         cipher = Cipher(algorithms.AES(key), modes.CBC(iv), backend=default_backend())
         encryptor = cipher.encryptor()
         
-        # Pad plaintext
-        pad_length = 16 - (len(plaintext) % 16)
-        padded_plaintext = plaintext + bytes([pad_length] * pad_length)
+        # Pad plaintext using PKCS7 padding
+        padder = crypto_padding.PKCS7(128).padder()
+        padded_plaintext = padder.update(plaintext) + padder.finalize()
         
         ciphertext = encryptor.update(padded_plaintext) + encryptor.finalize()
         
         # Decrypt
         cipher = Cipher(algorithms.AES(key), modes.CBC(iv), backend=default_backend())
         decryptor = cipher.decryptor()
-        decrypted = decryptor.update(ciphertext) + decryptor.finalize()
+        padded_decrypted = decryptor.update(ciphertext) + decryptor.finalize()
         
-        # Remove padding
-        pad_length = decrypted[-1]
-        decrypted = decrypted[:-pad_length]
+        # Remove padding using PKCS7 unpadder
+        unpadder = crypto_padding.PKCS7(128).unpadder()
+        decrypted = unpadder.update(padded_decrypted) + unpadder.finalize()
         
         assert plaintext == decrypted, "Decrypted text doesn't match original"
         print("✓ Symmetric encryption test passed")
@@ -231,8 +231,8 @@ def test_diffie_hellman():
     """Test Diffie-Hellman key exchange"""
     print("\nTesting Diffie-Hellman Key Exchange...")
     try:
-        # Generate parameters
-        parameters = dh.generate_parameters(generator=2, key_size=512, backend=default_backend())
+        # Generate parameters (using 2048-bit for security)
+        parameters = dh.generate_parameters(generator=2, key_size=2048, backend=default_backend())
         
         # Party A generates keys
         private_key_a = parameters.generate_private_key()
