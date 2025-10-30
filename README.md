@@ -189,7 +189,7 @@ This tests:
 - Diffie-Hellman key exchange
 - Hash functions (SHA-256, SHA-384, SHA-512, SHA3-256, SHA3-512)
 
-All 11 test functions should pass.
+All test functions should pass successfully.
 
 ## Security Notes
 
@@ -201,7 +201,9 @@ All 11 test functions should pass.
 - All keys and encrypted data can be saved/loaded using HEX or Base64 encoding
 - Use strong key sizes (at least 2048-bit for RSA, 256-bit for AES)
 - AEAD modes (GCM, CCM) provide both confidentiality and authenticity
-- ECB mode is included for educational purposes but should not be used in production
+
+### ⚠️ Important Security Warning
+**ECB mode is inherently insecure** as it does not use an initialization vector and reveals patterns in the plaintext. ECB mode is included in this tool **for educational purposes only** and should **never be used in production systems**. Always use CBC, CTR, GCM, or CCM modes for secure encryption.
 
 ## Project Structure
 
@@ -221,11 +223,16 @@ CryptoTool/
 
 ## Standards Compliance
 
+This tool implements cryptographic algorithms according to current and widely-adopted standards:
+
 - **RSA**: PKCS#1 (OAEP, PSS), PKCS#8 key format
-- **ECDSA**: NIST FIPS 186-4 recommended curves
-- **AES**: NIST FIPS 197
+- **ECDSA**: NIST FIPS 186-5 (Digital Signature Standard) with recommended curves
+- **AES**: NIST FIPS 197 (Advanced Encryption Standard)
 - **MAC**: NIST SP 800-38B (CMAC), NIST SP 800-38D (GMAC), FIPS 198-1 (HMAC)
-- **Hash Functions**: NIST FIPS 180-4 (SHA-2), NIST FIPS 202 (SHA-3)
+- **Hash Functions**: NIST FIPS 180-4 (SHA-2 family), NIST FIPS 202 (SHA-3 family)
+- **Modes of Operation**: NIST SP 800-38A (CBC, ECB, CFB, OFB, CTR), NIST SP 800-38D (GCM), NIST SP 800-38C (CCM)
+
+Note: Standards references reflect the versions implemented in the underlying cryptography library.
 
 ## License
 
