@@ -14,8 +14,9 @@ from PyQt5.QtWidgets import (
 from PyQt5.QtCore import Qt
 
 from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes
-from cryptography.hazmat.primitives import hashes, serialization, padding as crypto_padding
-from cryptography.hazmat.primitives.asymmetric import rsa, padding, dh
+from cryptography.hazmat.primitives.ciphers.aead import AESCCM, AESGCM
+from cryptography.hazmat.primitives import hashes, serialization, padding as crypto_padding, cmac, hmac
+from cryptography.hazmat.primitives.asymmetric import rsa, padding, dh, ec
 from cryptography.hazmat.primitives.kdf.pbkdf2 import PBKDF2HMAC
 from cryptography.hazmat.backends import default_backend
 import os
@@ -34,6 +35,8 @@ class CryptoTool(QMainWindow):
         self.rsa_public_key = None
         self.dh_private_key = None
         self.dh_public_key = None
+        self.ec_private_key = None
+        self.ec_public_key = None
         
         self.init_ui()
     
@@ -51,6 +54,7 @@ class CryptoTool(QMainWindow):
         
         # Add tabs for different functions
         tabs.addTab(self.create_symmetric_tab(), "Symmetric Encryption")
+        tabs.addTab(self.create_mac_tab(), "MAC Functions")
         tabs.addTab(self.create_asymmetric_tab(), "Asymmetric Encryption")
         tabs.addTab(self.create_signature_tab(), "Digital Signatures")
         tabs.addTab(self.create_key_gen_tab(), "Key Generation")
@@ -66,19 +70,34 @@ class CryptoTool(QMainWindow):
         
         # Algorithm selection
         algo_group = QGroupBox("Algorithm Settings")
-        algo_layout = QHBoxLayout()
+        algo_layout = QVBoxLayout()
         algo_group.setLayout(algo_layout)
         
-        algo_layout.addWidget(QLabel("Algorithm:"))
-        self.sym_algo_combo = QComboBox()
-        self.sym_algo_combo.addItems(["AES-256-CBC", "AES-256-GCM"])
-        algo_layout.addWidget(self.sym_algo_combo)
+        # Key size selection
+        key_size_layout = QHBoxLayout()
+        key_size_layout.addWidget(QLabel("Key Size:"))
+        self.sym_key_size_combo = QComboBox()
+        self.sym_key_size_combo.addItems(["128-bit (AES-128)", "192-bit (AES-192)", "256-bit (AES-256)"])
+        self.sym_key_size_combo.setCurrentIndex(2)  # Default to 256-bit
+        self.sym_key_size_combo.currentIndexChanged.connect(self.update_key_size_hint)
+        key_size_layout.addWidget(self.sym_key_size_combo)
+        algo_layout.addLayout(key_size_layout)
+        
+        # Cipher mode selection
+        mode_layout = QHBoxLayout()
+        mode_layout.addWidget(QLabel("Cipher Mode:"))
+        self.sym_mode_combo = QComboBox()
+        self.sym_mode_combo.addItems(["CBC", "GCM", "ECB", "CFB", "OFB", "CTR", "CCM"])
+        self.sym_mode_combo.currentIndexChanged.connect(self.update_mode_fields)
+        mode_layout.addWidget(self.sym_mode_combo)
+        algo_layout.addLayout(mode_layout)
+        
         layout.addWidget(algo_group)
         
         # Key input
-        key_group = QGroupBox("Key (HEX format, 64 hex characters for AES-256)")
+        self.key_group = QGroupBox("Key (HEX format)")
         key_layout = QVBoxLayout()
-        key_group.setLayout(key_layout)
+        self.key_group.setLayout(key_layout)
         
         self.sym_key_input = QLineEdit()
         self.sym_key_input.setPlaceholderText("Enter key in HEX format or generate one")
@@ -98,7 +117,18 @@ class CryptoTool(QMainWindow):
         key_btn_layout.addWidget(load_key_btn)
         
         key_layout.addLayout(key_btn_layout)
-        layout.addWidget(key_group)
+        layout.addWidget(self.key_group)
+        
+        # AAD (Additional Authenticated Data) input for AEAD modes
+        self.aad_group = QGroupBox("AAD (Additional Authenticated Data) - Optional for GCM/CCM")
+        aad_layout = QVBoxLayout()
+        self.aad_group.setLayout(aad_layout)
+        
+        self.sym_aad_input = QTextEdit()
+        self.sym_aad_input.setPlaceholderText("Enter additional authenticated data (plain text)")
+        self.sym_aad_input.setMaximumHeight(60)
+        aad_layout.addWidget(self.sym_aad_input)
+        layout.addWidget(self.aad_group)
         
         # Plaintext input
         plain_group = QGroupBox("Plaintext / Ciphertext")
@@ -121,7 +151,7 @@ class CryptoTool(QMainWindow):
         btn_layout.addWidget(decrypt_btn)
         
         clear_btn = QPushButton("Clear")
-        clear_btn.clicked.connect(lambda: self.sym_plaintext.clear())
+        clear_btn.clicked.connect(lambda: (self.sym_plaintext.clear(), self.sym_aad_input.clear()))
         btn_layout.addWidget(clear_btn)
         
         layout.addLayout(btn_layout)
@@ -135,6 +165,128 @@ class CryptoTool(QMainWindow):
         self.sym_output.setReadOnly(True)
         output_layout.addWidget(self.sym_output)
         layout.addWidget(output_group)
+        
+        # Initialize visibility
+        self.update_mode_fields()
+        self.update_key_size_hint()
+        
+        return widget
+    
+    def create_mac_tab(self):
+        """Create MAC functions tab"""
+        widget = QWidget()
+        layout = QVBoxLayout()
+        widget.setLayout(layout)
+        
+        # MAC algorithm selection
+        algo_group = QGroupBox("MAC Algorithm")
+        algo_layout = QVBoxLayout()
+        algo_group.setLayout(algo_layout)
+        
+        algo_select_layout = QHBoxLayout()
+        algo_select_layout.addWidget(QLabel("Algorithm:"))
+        self.mac_algo_combo = QComboBox()
+        self.mac_algo_combo.addItems(["CMAC (AES)", "CBC-MAC (AES)", "GMAC (AES)", "HMAC-SHA256", "HMAC-SHA384", "HMAC-SHA512"])
+        self.mac_algo_combo.currentIndexChanged.connect(self.update_mac_fields)
+        algo_select_layout.addWidget(self.mac_algo_combo)
+        algo_layout.addLayout(algo_select_layout)
+        
+        # Key size for AES-based MACs
+        key_size_layout = QHBoxLayout()
+        key_size_layout.addWidget(QLabel("Key Size:"))
+        self.mac_key_size_combo = QComboBox()
+        self.mac_key_size_combo.addItems(["128-bit", "192-bit", "256-bit"])
+        self.mac_key_size_combo.setCurrentIndex(2)
+        key_size_layout.addWidget(self.mac_key_size_combo)
+        algo_layout.addLayout(key_size_layout)
+        
+        layout.addWidget(algo_group)
+        
+        # Key input
+        key_group = QGroupBox("Key (HEX format)")
+        key_layout = QVBoxLayout()
+        key_group.setLayout(key_layout)
+        
+        self.mac_key_input = QLineEdit()
+        self.mac_key_input.setPlaceholderText("Enter key in HEX format or generate one")
+        key_layout.addWidget(self.mac_key_input)
+        
+        key_btn_layout = QHBoxLayout()
+        gen_key_btn = QPushButton("Generate Key")
+        gen_key_btn.clicked.connect(self.generate_mac_key)
+        key_btn_layout.addWidget(gen_key_btn)
+        
+        save_key_btn = QPushButton("Save Key")
+        save_key_btn.clicked.connect(lambda: self.save_to_file(self.mac_key_input.text(), "key"))
+        key_btn_layout.addWidget(save_key_btn)
+        
+        load_key_btn = QPushButton("Load Key")
+        load_key_btn.clicked.connect(lambda: self.load_from_file(self.mac_key_input))
+        key_btn_layout.addWidget(load_key_btn)
+        
+        key_layout.addLayout(key_btn_layout)
+        layout.addWidget(key_group)
+        
+        # AAD input for GMAC
+        self.mac_aad_group = QGroupBox("AAD (Additional Authenticated Data) - For GMAC")
+        aad_layout = QVBoxLayout()
+        self.mac_aad_group.setLayout(aad_layout)
+        
+        self.mac_aad_input = QTextEdit()
+        self.mac_aad_input.setPlaceholderText("Enter additional authenticated data (plain text)")
+        self.mac_aad_input.setMaximumHeight(60)
+        aad_layout.addWidget(self.mac_aad_input)
+        layout.addWidget(self.mac_aad_group)
+        
+        # Message input
+        msg_group = QGroupBox("Message")
+        msg_layout = QVBoxLayout()
+        msg_group.setLayout(msg_layout)
+        
+        self.mac_message = QTextEdit()
+        self.mac_message.setPlaceholderText("Enter message to compute MAC")
+        msg_layout.addWidget(self.mac_message)
+        layout.addWidget(msg_group)
+        
+        # Buttons
+        btn_layout = QHBoxLayout()
+        compute_btn = QPushButton("Compute MAC")
+        compute_btn.clicked.connect(self.compute_mac)
+        btn_layout.addWidget(compute_btn)
+        
+        verify_btn = QPushButton("Verify MAC")
+        verify_btn.clicked.connect(self.verify_mac)
+        btn_layout.addWidget(verify_btn)
+        
+        clear_btn = QPushButton("Clear")
+        clear_btn.clicked.connect(lambda: (self.mac_message.clear(), self.mac_aad_input.clear()))
+        btn_layout.addWidget(clear_btn)
+        
+        layout.addLayout(btn_layout)
+        
+        # MAC output
+        mac_group = QGroupBox("MAC Tag (HEX)")
+        mac_layout = QVBoxLayout()
+        mac_group.setLayout(mac_layout)
+        
+        self.mac_output = QTextEdit()
+        self.mac_output.setPlaceholderText("MAC tag will appear here")
+        self.mac_output.setMaximumHeight(80)
+        mac_layout.addWidget(self.mac_output)
+        layout.addWidget(mac_group)
+        
+        # Status output
+        status_group = QGroupBox("Status")
+        status_layout = QVBoxLayout()
+        status_group.setLayout(status_layout)
+        
+        self.mac_status = QTextEdit()
+        self.mac_status.setReadOnly(True)
+        status_layout.addWidget(self.mac_status)
+        layout.addWidget(status_group)
+        
+        # Initialize field visibility
+        self.update_mac_fields()
         
         return widget
     
@@ -199,9 +351,20 @@ class CryptoTool(QMainWindow):
         widget.setLayout(layout)
         
         # Key info
-        info_label = QLabel("Use the Key Generation tab to generate RSA keys first")
+        info_label = QLabel("Use the Key Generation tab to generate RSA or ECDSA keys first")
         info_label.setAlignment(Qt.AlignCenter)
         layout.addWidget(info_label)
+        
+        # Algorithm selection
+        algo_group = QGroupBox("Signature Algorithm")
+        algo_layout = QHBoxLayout()
+        algo_group.setLayout(algo_layout)
+        
+        algo_layout.addWidget(QLabel("Algorithm:"))
+        self.sig_algo_combo = QComboBox()
+        self.sig_algo_combo.addItems(["RSA-PSS", "ECDSA"])
+        algo_layout.addWidget(self.sig_algo_combo)
+        layout.addWidget(algo_group)
         
         # Key status
         self.sig_key_status = QLabel("Keys: Not loaded")
@@ -304,6 +467,49 @@ class CryptoTool(QMainWindow):
         
         rsa_layout.addLayout(rsa_file_layout)
         layout.addWidget(rsa_group)
+        
+        # ECDSA Key Generation
+        ec_group = QGroupBox("ECDSA Key Pair Generation")
+        ec_layout = QVBoxLayout()
+        ec_group.setLayout(ec_layout)
+        
+        ec_curve_layout = QHBoxLayout()
+        ec_curve_layout.addWidget(QLabel("NIST Curve:"))
+        self.ec_curve_combo = QComboBox()
+        self.ec_curve_combo.addItems(["P-256 (secp256r1)", "P-384 (secp384r1)", "P-521 (secp521r1)"])
+        ec_curve_layout.addWidget(self.ec_curve_combo)
+        ec_layout.addLayout(ec_curve_layout)
+        
+        gen_ec_btn = QPushButton("Generate ECDSA Key Pair")
+        gen_ec_btn.clicked.connect(self.generate_ec_keys)
+        ec_layout.addWidget(gen_ec_btn)
+        
+        # EC Key display
+        self.ec_keys_display = QTextEdit()
+        self.ec_keys_display.setReadOnly(True)
+        self.ec_keys_display.setMaximumHeight(150)
+        ec_layout.addWidget(self.ec_keys_display)
+        
+        # EC Save/Load buttons
+        ec_file_layout = QHBoxLayout()
+        save_ec_priv_btn = QPushButton("Save Private Key")
+        save_ec_priv_btn.clicked.connect(self.save_ec_private_key)
+        ec_file_layout.addWidget(save_ec_priv_btn)
+        
+        save_ec_pub_btn = QPushButton("Save Public Key")
+        save_ec_pub_btn.clicked.connect(self.save_ec_public_key)
+        ec_file_layout.addWidget(save_ec_pub_btn)
+        
+        load_ec_priv_btn = QPushButton("Load Private Key")
+        load_ec_priv_btn.clicked.connect(self.load_ec_private_key)
+        ec_file_layout.addWidget(load_ec_priv_btn)
+        
+        load_ec_pub_btn = QPushButton("Load Public Key")
+        load_ec_pub_btn.clicked.connect(self.load_ec_public_key)
+        ec_file_layout.addWidget(load_ec_pub_btn)
+        
+        ec_layout.addLayout(ec_file_layout)
+        layout.addWidget(ec_group)
         
         # Output
         output_group = QGroupBox("Status")
@@ -511,14 +717,61 @@ class CryptoTool(QMainWindow):
         
         return widget
     
+    # UI Helper methods
+    def update_mode_fields(self):
+        """Update field visibility based on selected cipher mode"""
+        mode = self.sym_mode_combo.currentText()
+        # Show AAD only for AEAD modes (GCM, CCM)
+        self.aad_group.setVisible(mode in ["GCM", "CCM"])
+    
+    def update_key_size_hint(self):
+        """Update key input hint based on selected key size"""
+        key_size_text = self.sym_key_size_combo.currentText()
+        if "128" in key_size_text:
+            hint = "Key (HEX format, 32 hex characters for AES-128)"
+        elif "192" in key_size_text:
+            hint = "Key (HEX format, 48 hex characters for AES-192)"
+        else:
+            hint = "Key (HEX format, 64 hex characters for AES-256)"
+        self.key_group.setTitle(hint)
+    
+    def update_mac_fields(self):
+        """Update field visibility based on selected MAC algorithm"""
+        algo = self.mac_algo_combo.currentText()
+        # Show AAD only for GMAC
+        self.mac_aad_group.setVisible("GMAC" in algo)
+        # Show key size only for AES-based MACs
+        self.mac_key_size_combo.setEnabled("AES" in algo)
+    
+    def get_key_size_bytes(self):
+        """Get key size in bytes from the combo box"""
+        key_size_text = self.sym_key_size_combo.currentText()
+        if "128" in key_size_text:
+            return 16
+        elif "192" in key_size_text:
+            return 24
+        else:
+            return 32
+    
+    def get_mac_key_size_bytes(self):
+        """Get MAC key size in bytes from the combo box"""
+        key_size_text = self.mac_key_size_combo.currentText()
+        if "128" in key_size_text:
+            return 16
+        elif "192" in key_size_text:
+            return 24
+        else:
+            return 32
+    
     # Symmetric encryption methods
     def generate_symmetric_key(self):
         """Generate a random symmetric key"""
         try:
-            key = os.urandom(32)  # 256 bits
+            key_size = self.get_key_size_bytes()
+            key = os.urandom(key_size)
             key_hex = key.hex()
             self.sym_key_input.setText(key_hex)
-            self.sym_output.setText("✓ Generated new 256-bit key")
+            self.sym_output.setText(f"✓ Generated new {key_size*8}-bit key")
         except Exception as e:
             QMessageBox.critical(self, "Error", f"Failed to generate key: {str(e)}")
     
@@ -534,17 +787,25 @@ class CryptoTool(QMainWindow):
             key_hex = self.clean_hex_input(key_hex)
             
             key = bytes.fromhex(key_hex)
-            if len(key) != 32:
-                raise ValueError("Key must be 32 bytes (64 hex characters)")
+            expected_key_size = self.get_key_size_bytes()
+            if len(key) != expected_key_size:
+                raise ValueError(f"Key must be {expected_key_size} bytes ({expected_key_size*2} hex characters)")
             
             # Get plaintext
             plaintext = self.sym_plaintext.toPlainText().encode()
             if not plaintext:
                 raise ValueError("Please enter plaintext")
             
-            algo = self.sym_algo_combo.currentText()
+            mode = self.sym_mode_combo.currentText()
             
-            if algo == "AES-256-CBC":
+            # Get AAD if applicable
+            aad = None
+            if mode in ["GCM", "CCM"]:
+                aad_text = self.sym_aad_input.toPlainText()
+                if aad_text:
+                    aad = aad_text.encode()
+            
+            if mode == "CBC":
                 # Generate random IV
                 iv = os.urandom(16)
                 cipher = Cipher(algorithms.AES(key), modes.CBC(iv), backend=default_backend())
@@ -559,20 +820,90 @@ class CryptoTool(QMainWindow):
                 # Combine IV and ciphertext
                 result = iv + ciphertext
                 result_hex = result.hex()
+                self.sym_output.setText(f"✓ Encryption successful (AES-CBC)\n\nCiphertext (HEX):\n{result_hex}")
                 
-            elif algo == "AES-256-GCM":
+            elif mode == "GCM":
                 # Generate random nonce
                 nonce = os.urandom(12)
                 cipher = Cipher(algorithms.AES(key), modes.GCM(nonce), backend=default_backend())
                 encryptor = cipher.encryptor()
+                
+                if aad:
+                    encryptor.authenticate_additional_data(aad)
                 
                 ciphertext = encryptor.update(plaintext) + encryptor.finalize()
                 
                 # Combine nonce, ciphertext, and tag
                 result = nonce + ciphertext + encryptor.tag
                 result_hex = result.hex()
+                tag_hex = encryptor.tag.hex()
+                self.sym_output.setText(f"✓ Encryption successful (AES-GCM)\n\nCiphertext (HEX):\n{result_hex}\n\nTag (HEX):\n{tag_hex}")
             
-            self.sym_output.setText(f"✓ Encryption successful\n\nCiphertext (HEX):\n{result_hex}")
+            elif mode == "ECB":
+                # ECB mode - no IV needed
+                cipher = Cipher(algorithms.AES(key), modes.ECB(), backend=default_backend())
+                encryptor = cipher.encryptor()
+                
+                # Pad plaintext to block size using PKCS7 padding
+                padder = crypto_padding.PKCS7(128).padder()
+                padded_plaintext = padder.update(plaintext) + padder.finalize()
+                
+                ciphertext = encryptor.update(padded_plaintext) + encryptor.finalize()
+                result_hex = ciphertext.hex()
+                self.sym_output.setText(f"✓ Encryption successful (AES-ECB)\n\nCiphertext (HEX):\n{result_hex}")
+            
+            elif mode == "CFB":
+                # Generate random IV
+                iv = os.urandom(16)
+                cipher = Cipher(algorithms.AES(key), modes.CFB(iv), backend=default_backend())
+                encryptor = cipher.encryptor()
+                
+                ciphertext = encryptor.update(plaintext) + encryptor.finalize()
+                
+                # Combine IV and ciphertext
+                result = iv + ciphertext
+                result_hex = result.hex()
+                self.sym_output.setText(f"✓ Encryption successful (AES-CFB)\n\nCiphertext (HEX):\n{result_hex}")
+            
+            elif mode == "OFB":
+                # Generate random IV
+                iv = os.urandom(16)
+                cipher = Cipher(algorithms.AES(key), modes.OFB(iv), backend=default_backend())
+                encryptor = cipher.encryptor()
+                
+                ciphertext = encryptor.update(plaintext) + encryptor.finalize()
+                
+                # Combine IV and ciphertext
+                result = iv + ciphertext
+                result_hex = result.hex()
+                self.sym_output.setText(f"✓ Encryption successful (AES-OFB)\n\nCiphertext (HEX):\n{result_hex}")
+            
+            elif mode == "CTR":
+                # Generate random nonce
+                nonce = os.urandom(16)
+                cipher = Cipher(algorithms.AES(key), modes.CTR(nonce), backend=default_backend())
+                encryptor = cipher.encryptor()
+                
+                ciphertext = encryptor.update(plaintext) + encryptor.finalize()
+                
+                # Combine nonce and ciphertext
+                result = nonce + ciphertext
+                result_hex = result.hex()
+                self.sym_output.setText(f"✓ Encryption successful (AES-CTR)\n\nCiphertext (HEX):\n{result_hex}")
+            
+            elif mode == "CCM":
+                # Generate random nonce (7-13 bytes for CCM, using 13)
+                nonce = os.urandom(13)
+                aesccm = AESCCM(key, tag_length=16)
+                
+                ciphertext = aesccm.encrypt(nonce, plaintext, aad)
+                
+                # Combine nonce and ciphertext (tag is already included)
+                result = nonce + ciphertext
+                result_hex = result.hex()
+                # Extract tag (last 16 bytes of ciphertext)
+                tag_hex = ciphertext[-16:].hex()
+                self.sym_output.setText(f"✓ Encryption successful (AES-CCM)\n\nCiphertext (HEX):\n{result_hex}\n\nTag (HEX):\n{tag_hex}")
             
         except Exception as e:
             QMessageBox.critical(self, "Error", f"Encryption failed: {str(e)}")
@@ -590,8 +921,9 @@ class CryptoTool(QMainWindow):
             key_hex = self.clean_hex_input(key_hex)
             
             key = bytes.fromhex(key_hex)
-            if len(key) != 32:
-                raise ValueError("Key must be 32 bytes (64 hex characters)")
+            expected_key_size = self.get_key_size_bytes()
+            if len(key) != expected_key_size:
+                raise ValueError(f"Key must be {expected_key_size} bytes ({expected_key_size*2} hex characters)")
             
             # Get ciphertext
             ciphertext_hex = self.sym_plaintext.toPlainText().strip()
@@ -602,9 +934,16 @@ class CryptoTool(QMainWindow):
             ciphertext_hex = self.clean_hex_input(ciphertext_hex)
             
             data = bytes.fromhex(ciphertext_hex)
-            algo = self.sym_algo_combo.currentText()
+            mode = self.sym_mode_combo.currentText()
             
-            if algo == "AES-256-CBC":
+            # Get AAD if applicable
+            aad = None
+            if mode in ["GCM", "CCM"]:
+                aad_text = self.sym_aad_input.toPlainText()
+                if aad_text:
+                    aad = aad_text.encode()
+            
+            if mode == "CBC":
                 if len(data) < 16:
                     raise ValueError("Invalid ciphertext")
                 
@@ -620,7 +959,7 @@ class CryptoTool(QMainWindow):
                 unpadder = crypto_padding.PKCS7(128).unpadder()
                 plaintext = unpadder.update(padded_plaintext) + unpadder.finalize()
                 
-            elif algo == "AES-256-GCM":
+            elif mode == "GCM":
                 if len(data) < 28:  # 12 (nonce) + 16 (tag)
                     raise ValueError("Invalid ciphertext")
                 
@@ -631,7 +970,69 @@ class CryptoTool(QMainWindow):
                 cipher = Cipher(algorithms.AES(key), modes.GCM(nonce, tag), backend=default_backend())
                 decryptor = cipher.decryptor()
                 
+                if aad:
+                    decryptor.authenticate_additional_data(aad)
+                
                 plaintext = decryptor.update(ciphertext) + decryptor.finalize()
+            
+            elif mode == "ECB":
+                # ECB mode - no IV
+                ciphertext = data
+                
+                cipher = Cipher(algorithms.AES(key), modes.ECB(), backend=default_backend())
+                decryptor = cipher.decryptor()
+                
+                padded_plaintext = decryptor.update(ciphertext) + decryptor.finalize()
+                
+                # Remove padding using PKCS7 unpadder
+                unpadder = crypto_padding.PKCS7(128).unpadder()
+                plaintext = unpadder.update(padded_plaintext) + unpadder.finalize()
+            
+            elif mode == "CFB":
+                if len(data) < 16:
+                    raise ValueError("Invalid ciphertext")
+                
+                iv = data[:16]
+                ciphertext = data[16:]
+                
+                cipher = Cipher(algorithms.AES(key), modes.CFB(iv), backend=default_backend())
+                decryptor = cipher.decryptor()
+                
+                plaintext = decryptor.update(ciphertext) + decryptor.finalize()
+            
+            elif mode == "OFB":
+                if len(data) < 16:
+                    raise ValueError("Invalid ciphertext")
+                
+                iv = data[:16]
+                ciphertext = data[16:]
+                
+                cipher = Cipher(algorithms.AES(key), modes.OFB(iv), backend=default_backend())
+                decryptor = cipher.decryptor()
+                
+                plaintext = decryptor.update(ciphertext) + decryptor.finalize()
+            
+            elif mode == "CTR":
+                if len(data) < 16:
+                    raise ValueError("Invalid ciphertext")
+                
+                nonce = data[:16]
+                ciphertext = data[16:]
+                
+                cipher = Cipher(algorithms.AES(key), modes.CTR(nonce), backend=default_backend())
+                decryptor = cipher.decryptor()
+                
+                plaintext = decryptor.update(ciphertext) + decryptor.finalize()
+            
+            elif mode == "CCM":
+                if len(data) < 29:  # 13 (nonce) + 16 (tag)
+                    raise ValueError("Invalid ciphertext")
+                
+                nonce = data[:13]
+                ciphertext_with_tag = data[13:]  # Includes tag
+                
+                aesccm = AESCCM(key, tag_length=16)
+                plaintext = aesccm.decrypt(nonce, ciphertext_with_tag, aad)
             
             plaintext_str = plaintext.decode()
             self.sym_output.setText(f"✓ Decryption successful\n\nPlaintext:\n{plaintext_str}")
@@ -639,6 +1040,183 @@ class CryptoTool(QMainWindow):
         except Exception as e:
             QMessageBox.critical(self, "Error", f"Decryption failed: {str(e)}")
             self.sym_output.setText(f"✗ Error: {str(e)}")
+    
+    # MAC Functions methods
+    def generate_mac_key(self):
+        """Generate a random MAC key"""
+        try:
+            algo = self.mac_algo_combo.currentText()
+            if "HMAC" in algo:
+                # HMAC can use any key length, but we'll use 32 bytes
+                key_size = 32
+            else:
+                # AES-based MACs
+                key_size = self.get_mac_key_size_bytes()
+            
+            key = os.urandom(key_size)
+            key_hex = key.hex()
+            self.mac_key_input.setText(key_hex)
+            self.mac_status.setText(f"✓ Generated new {key_size*8}-bit key")
+        except Exception as e:
+            QMessageBox.critical(self, "Error", f"Failed to generate key: {str(e)}")
+    
+    def compute_mac(self):
+        """Compute MAC for the given message"""
+        try:
+            # Get key
+            key_hex = self.mac_key_input.text().strip()
+            if not key_hex:
+                raise ValueError("Please enter or generate a key")
+            
+            key_hex = self.clean_hex_input(key_hex)
+            key = bytes.fromhex(key_hex)
+            
+            # Get message
+            message = self.mac_message.toPlainText().encode()
+            if not message:
+                raise ValueError("Please enter a message")
+            
+            algo = self.mac_algo_combo.currentText()
+            
+            if algo == "CMAC (AES)":
+                # CMAC using AES
+                c = cmac.CMAC(algorithms.AES(key), backend=default_backend())
+                c.update(message)
+                mac_tag = c.finalize()
+                
+            elif algo == "CBC-MAC (AES)":
+                # CBC-MAC is just CBC with IV=0 and taking the last block
+                iv = bytes(16)  # All zeros
+                cipher = Cipher(algorithms.AES(key), modes.CBC(iv), backend=default_backend())
+                encryptor = cipher.encryptor()
+                
+                # Pad message to block size
+                padder = crypto_padding.PKCS7(128).padder()
+                padded_message = padder.update(message) + padder.finalize()
+                
+                ciphertext = encryptor.update(padded_message) + encryptor.finalize()
+                # Take the last block as the MAC
+                mac_tag = ciphertext[-16:]
+                
+            elif algo == "GMAC (AES)":
+                # GMAC is GCM with empty plaintext
+                nonce = os.urandom(12)
+                
+                # Get AAD
+                aad = self.mac_aad_input.toPlainText().encode() if self.mac_aad_input.toPlainText() else message
+                
+                cipher = Cipher(algorithms.AES(key), modes.GCM(nonce), backend=default_backend())
+                encryptor = cipher.encryptor()
+                encryptor.authenticate_additional_data(aad)
+                encryptor.finalize()
+                
+                # Combine nonce and tag for output
+                mac_tag = nonce + encryptor.tag
+                
+            elif "HMAC" in algo:
+                # HMAC
+                if "SHA256" in algo:
+                    hash_algo = hashes.SHA256()
+                elif "SHA384" in algo:
+                    hash_algo = hashes.SHA384()
+                elif "SHA512" in algo:
+                    hash_algo = hashes.SHA512()
+                else:
+                    raise ValueError("Unknown HMAC algorithm")
+                
+                h = hmac.HMAC(key, hash_algo, backend=default_backend())
+                h.update(message)
+                mac_tag = h.finalize()
+            
+            mac_hex = mac_tag.hex()
+            self.mac_output.setText(mac_hex)
+            self.mac_status.setText(f"✓ MAC computed successfully using {algo}")
+            
+        except Exception as e:
+            QMessageBox.critical(self, "Error", f"MAC computation failed: {str(e)}")
+            self.mac_status.setText(f"✗ Error: {str(e)}")
+    
+    def verify_mac(self):
+        """Verify MAC for the given message"""
+        try:
+            # Get key
+            key_hex = self.mac_key_input.text().strip()
+            if not key_hex:
+                raise ValueError("Please enter or generate a key")
+            
+            key_hex = self.clean_hex_input(key_hex)
+            key = bytes.fromhex(key_hex)
+            
+            # Get message
+            message = self.mac_message.toPlainText().encode()
+            if not message:
+                raise ValueError("Please enter a message")
+            
+            # Get MAC tag
+            mac_hex = self.mac_output.toPlainText().strip()
+            if not mac_hex:
+                raise ValueError("Please compute or enter a MAC tag")
+            
+            mac_hex = self.clean_hex_input(mac_hex)
+            expected_mac = bytes.fromhex(mac_hex)
+            
+            algo = self.mac_algo_combo.currentText()
+            
+            if algo == "CMAC (AES)":
+                c = cmac.CMAC(algorithms.AES(key), backend=default_backend())
+                c.update(message)
+                c.verify(expected_mac)
+                
+            elif algo == "CBC-MAC (AES)":
+                # Recompute CBC-MAC
+                iv = bytes(16)
+                cipher = Cipher(algorithms.AES(key), modes.CBC(iv), backend=default_backend())
+                encryptor = cipher.encryptor()
+                
+                padder = crypto_padding.PKCS7(128).padder()
+                padded_message = padder.update(message) + padder.finalize()
+                
+                ciphertext = encryptor.update(padded_message) + encryptor.finalize()
+                computed_mac = ciphertext[-16:]
+                
+                if computed_mac != expected_mac:
+                    raise ValueError("MAC verification failed")
+                
+            elif algo == "GMAC (AES)":
+                # GMAC verification - need to extract nonce and tag
+                if len(expected_mac) < 28:  # 12 (nonce) + 16 (tag)
+                    raise ValueError("Invalid GMAC format")
+                
+                nonce = expected_mac[:12]
+                tag = expected_mac[12:]
+                
+                aad = self.mac_aad_input.toPlainText().encode() if self.mac_aad_input.toPlainText() else message
+                
+                cipher = Cipher(algorithms.AES(key), modes.GCM(nonce, tag), backend=default_backend())
+                decryptor = cipher.decryptor()
+                decryptor.authenticate_additional_data(aad)
+                decryptor.finalize()
+                
+            elif "HMAC" in algo:
+                if "SHA256" in algo:
+                    hash_algo = hashes.SHA256()
+                elif "SHA384" in algo:
+                    hash_algo = hashes.SHA384()
+                elif "SHA512" in algo:
+                    hash_algo = hashes.SHA512()
+                else:
+                    raise ValueError("Unknown HMAC algorithm")
+                
+                h = hmac.HMAC(key, hash_algo, backend=default_backend())
+                h.update(message)
+                h.verify(expected_mac)
+            
+            self.mac_status.setText("✓ MAC verification SUCCESSFUL - Message is authentic")
+            QMessageBox.information(self, "Success", "MAC verification successful!")
+            
+        except Exception as e:
+            self.mac_status.setText(f"✗ MAC verification FAILED - {str(e)}")
+            QMessageBox.warning(self, "Verification Failed", f"MAC verification failed: {str(e)}")
     
     # RSA key generation methods
     def generate_rsa_keys(self):
@@ -680,14 +1258,20 @@ class CryptoTool(QMainWindow):
     
     def update_key_status(self):
         """Update key status labels in other tabs"""
-        if self.rsa_private_key and self.rsa_public_key:
-            status = "Keys: Loaded ✓"
-            self.asym_key_status.setText(status)
-            self.sig_key_status.setText(status)
+        rsa_loaded = self.rsa_private_key and self.rsa_public_key
+        ec_loaded = self.ec_private_key and self.ec_public_key
+        
+        if rsa_loaded and ec_loaded:
+            status = "Keys: RSA and ECDSA Loaded ✓"
+        elif rsa_loaded:
+            status = "Keys: RSA Loaded ✓"
+        elif ec_loaded:
+            status = "Keys: ECDSA Loaded ✓"
         else:
             status = "Keys: Not loaded"
-            self.asym_key_status.setText(status)
-            self.sig_key_status.setText(status)
+        
+        self.asym_key_status.setText(status)
+        self.sig_key_status.setText(status)
     
     def save_private_key(self):
         """Save private key to file"""
@@ -761,6 +1345,122 @@ class CryptoTool(QMainWindow):
         except Exception as e:
             QMessageBox.critical(self, "Error", f"Failed to load public key: {str(e)}")
     
+    # ECDSA key generation methods
+    def generate_ec_keys(self):
+        """Generate ECDSA key pair"""
+        try:
+            curve_text = self.ec_curve_combo.currentText()
+            
+            # Map UI text to curve
+            if "P-256" in curve_text:
+                curve = ec.SECP256R1()
+            elif "P-384" in curve_text:
+                curve = ec.SECP384R1()
+            elif "P-521" in curve_text:
+                curve = ec.SECP521R1()
+            else:
+                raise ValueError("Unknown curve")
+            
+            self.keygen_output.setText(f"Generating ECDSA key pair with {curve_text}... Please wait.")
+            QApplication.processEvents()
+            
+            self.ec_private_key = ec.generate_private_key(curve, backend=default_backend())
+            self.ec_public_key = self.ec_private_key.public_key()
+            
+            # Display keys
+            private_pem = self.ec_private_key.private_bytes(
+                encoding=serialization.Encoding.PEM,
+                format=serialization.PrivateFormat.PKCS8,
+                encryption_algorithm=serialization.NoEncryption()
+            )
+            
+            public_pem = self.ec_public_key.public_bytes(
+                encoding=serialization.Encoding.PEM,
+                format=serialization.PublicFormat.SubjectPublicKeyInfo
+            )
+            
+            self.ec_keys_display.setText(f"Private Key:\n{private_pem.decode()}\n\nPublic Key:\n{public_pem.decode()}")
+            self.keygen_output.setText(f"✓ Successfully generated ECDSA key pair with {curve_text}")
+            
+            # Update status in other tabs
+            self.update_key_status()
+            
+        except Exception as e:
+            QMessageBox.critical(self, "Error", f"ECDSA key generation failed: {str(e)}")
+            self.keygen_output.setText(f"✗ Error: {str(e)}")
+    
+    def save_ec_private_key(self):
+        """Save EC private key to file"""
+        if not self.ec_private_key:
+            QMessageBox.warning(self, "Warning", "No EC private key to save. Generate keys first.")
+            return
+        
+        try:
+            filename, _ = QFileDialog.getSaveFileName(self, "Save EC Private Key", "", "PEM Files (*.pem);;All Files (*)")
+            if filename:
+                pem = self.ec_private_key.private_bytes(
+                    encoding=serialization.Encoding.PEM,
+                    format=serialization.PrivateFormat.PKCS8,
+                    encryption_algorithm=serialization.NoEncryption()
+                )
+                with open(filename, 'wb') as f:
+                    f.write(pem)
+                self.keygen_output.setText(f"✓ EC private key saved to {filename}")
+        except Exception as e:
+            QMessageBox.critical(self, "Error", f"Failed to save EC private key: {str(e)}")
+    
+    def save_ec_public_key(self):
+        """Save EC public key to file"""
+        if not self.ec_public_key:
+            QMessageBox.warning(self, "Warning", "No EC public key to save. Generate keys first.")
+            return
+        
+        try:
+            filename, _ = QFileDialog.getSaveFileName(self, "Save EC Public Key", "", "PEM Files (*.pem);;All Files (*)")
+            if filename:
+                pem = self.ec_public_key.public_bytes(
+                    encoding=serialization.Encoding.PEM,
+                    format=serialization.PublicFormat.SubjectPublicKeyInfo
+                )
+                with open(filename, 'wb') as f:
+                    f.write(pem)
+                self.keygen_output.setText(f"✓ EC public key saved to {filename}")
+        except Exception as e:
+            QMessageBox.critical(self, "Error", f"Failed to save EC public key: {str(e)}")
+    
+    def load_ec_private_key(self):
+        """Load EC private key from file"""
+        try:
+            filename, _ = QFileDialog.getOpenFileName(self, "Load EC Private Key", "", "PEM Files (*.pem);;All Files (*)")
+            if filename:
+                with open(filename, 'rb') as f:
+                    pem_data = f.read()
+                self.ec_private_key = serialization.load_pem_private_key(
+                    pem_data,
+                    password=None,
+                    backend=default_backend()
+                )
+                self.keygen_output.setText(f"✓ EC private key loaded from {filename}")
+                self.update_key_status()
+        except Exception as e:
+            QMessageBox.critical(self, "Error", f"Failed to load EC private key: {str(e)}")
+    
+    def load_ec_public_key(self):
+        """Load EC public key from file"""
+        try:
+            filename, _ = QFileDialog.getOpenFileName(self, "Load EC Public Key", "", "PEM Files (*.pem);;All Files (*)")
+            if filename:
+                with open(filename, 'rb') as f:
+                    pem_data = f.read()
+                self.ec_public_key = serialization.load_pem_public_key(
+                    pem_data,
+                    backend=default_backend()
+                )
+                self.keygen_output.setText(f"✓ EC public key loaded from {filename}")
+                self.update_key_status()
+        except Exception as e:
+            QMessageBox.critical(self, "Error", f"Failed to load EC public key: {str(e)}")
+    
     # Asymmetric encryption methods
     def asymmetric_encrypt(self):
         """Encrypt message using RSA public key"""
@@ -821,37 +1521,48 @@ class CryptoTool(QMainWindow):
     
     # Digital signature methods
     def sign_message(self):
-        """Sign message using RSA private key"""
+        """Sign message using RSA or ECDSA private key"""
         try:
-            if not self.rsa_private_key:
-                raise ValueError("No private key loaded. Generate or load keys first.")
+            algo = self.sig_algo_combo.currentText()
             
             message = self.sig_message.toPlainText().encode()
             if not message:
                 raise ValueError("Please enter a message")
             
-            signature = self.rsa_private_key.sign(
-                message,
-                padding.PSS(
-                    mgf=padding.MGF1(hashes.SHA256()),
-                    salt_length=padding.PSS.MAX_LENGTH
-                ),
-                hashes.SHA256()
-            )
+            if algo == "RSA-PSS":
+                if not self.rsa_private_key:
+                    raise ValueError("No RSA private key loaded. Generate or load RSA keys first.")
+                
+                signature = self.rsa_private_key.sign(
+                    message,
+                    padding.PSS(
+                        mgf=padding.MGF1(hashes.SHA256()),
+                        salt_length=padding.PSS.MAX_LENGTH
+                    ),
+                    hashes.SHA256()
+                )
+                
+            elif algo == "ECDSA":
+                if not self.ec_private_key:
+                    raise ValueError("No ECDSA private key loaded. Generate or load ECDSA keys first.")
+                
+                signature = self.ec_private_key.sign(
+                    message,
+                    ec.ECDSA(hashes.SHA256())
+                )
             
             signature_hex = signature.hex()
             self.sig_signature.setText(signature_hex)
-            self.sig_output.setText("✓ Message signed successfully")
+            self.sig_output.setText(f"✓ Message signed successfully using {algo}")
             
         except Exception as e:
             QMessageBox.critical(self, "Error", f"Signing failed: {str(e)}")
             self.sig_output.setText(f"✗ Error: {str(e)}")
     
     def verify_signature(self):
-        """Verify signature using RSA public key"""
+        """Verify signature using RSA or ECDSA public key"""
         try:
-            if not self.rsa_public_key:
-                raise ValueError("No public key loaded. Generate or load keys first.")
+            algo = self.sig_algo_combo.currentText()
             
             message = self.sig_message.toPlainText().encode()
             if not message:
@@ -863,20 +1574,33 @@ class CryptoTool(QMainWindow):
             
             # Clean hex input
             signature_hex = self.clean_hex_input(signature_hex)
-            
             signature = bytes.fromhex(signature_hex)
             
-            self.rsa_public_key.verify(
-                signature,
-                message,
-                padding.PSS(
-                    mgf=padding.MGF1(hashes.SHA256()),
-                    salt_length=padding.PSS.MAX_LENGTH
-                ),
-                hashes.SHA256()
-            )
+            if algo == "RSA-PSS":
+                if not self.rsa_public_key:
+                    raise ValueError("No RSA public key loaded. Generate or load RSA keys first.")
+                
+                self.rsa_public_key.verify(
+                    signature,
+                    message,
+                    padding.PSS(
+                        mgf=padding.MGF1(hashes.SHA256()),
+                        salt_length=padding.PSS.MAX_LENGTH
+                    ),
+                    hashes.SHA256()
+                )
+                
+            elif algo == "ECDSA":
+                if not self.ec_public_key:
+                    raise ValueError("No ECDSA public key loaded. Generate or load ECDSA keys first.")
+                
+                self.ec_public_key.verify(
+                    signature,
+                    message,
+                    ec.ECDSA(hashes.SHA256())
+                )
             
-            self.sig_output.setText("✓ Signature is VALID")
+            self.sig_output.setText(f"✓ Signature is VALID ({algo})")
             QMessageBox.information(self, "Success", "Signature verification successful!")
             
         except Exception as e:
