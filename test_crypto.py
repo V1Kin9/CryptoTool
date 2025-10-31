@@ -7,8 +7,9 @@ Tests all cryptographic operations without GUI
 import sys
 import base64
 from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes
-from cryptography.hazmat.primitives import hashes, serialization, padding as crypto_padding
-from cryptography.hazmat.primitives.asymmetric import rsa, padding, dh
+from cryptography.hazmat.primitives.ciphers.aead import AESCCM, AESGCM
+from cryptography.hazmat.primitives import hashes, serialization, padding as crypto_padding, cmac, hmac
+from cryptography.hazmat.primitives.asymmetric import rsa, padding, dh, ec
 from cryptography.hazmat.backends import default_backend
 import os
 
@@ -75,6 +76,216 @@ def test_symmetric_encryption_gcm():
         return True
     except Exception as e:
         print(f"✗ Symmetric encryption (GCM) test failed: {e}")
+        return False
+
+
+def test_aes_128_192():
+    """Test AES-128 and AES-192 encryption"""
+    print("\nTesting AES-128 and AES-192...")
+    try:
+        plaintext = b"Test message for different key sizes"
+        
+        # Test AES-128
+        key_128 = os.urandom(16)
+        iv = os.urandom(16)
+        cipher = Cipher(algorithms.AES(key_128), modes.CBC(iv), backend=default_backend())
+        encryptor = cipher.encryptor()
+        
+        padder = crypto_padding.PKCS7(128).padder()
+        padded = padder.update(plaintext) + padder.finalize()
+        ciphertext = encryptor.update(padded) + encryptor.finalize()
+        
+        # Decrypt
+        cipher = Cipher(algorithms.AES(key_128), modes.CBC(iv), backend=default_backend())
+        decryptor = cipher.decryptor()
+        padded_decrypted = decryptor.update(ciphertext) + decryptor.finalize()
+        unpadder = crypto_padding.PKCS7(128).unpadder()
+        decrypted = unpadder.update(padded_decrypted) + unpadder.finalize()
+        
+        assert plaintext == decrypted, "AES-128 decryption failed"
+        
+        # Test AES-192
+        key_192 = os.urandom(24)
+        iv = os.urandom(16)
+        cipher = Cipher(algorithms.AES(key_192), modes.CBC(iv), backend=default_backend())
+        encryptor = cipher.encryptor()
+        
+        padder = crypto_padding.PKCS7(128).padder()
+        padded = padder.update(plaintext) + padder.finalize()
+        ciphertext = encryptor.update(padded) + encryptor.finalize()
+        
+        # Decrypt
+        cipher = Cipher(algorithms.AES(key_192), modes.CBC(iv), backend=default_backend())
+        decryptor = cipher.decryptor()
+        padded_decrypted = decryptor.update(ciphertext) + decryptor.finalize()
+        unpadder = crypto_padding.PKCS7(128).unpadder()
+        decrypted = unpadder.update(padded_decrypted) + unpadder.finalize()
+        
+        assert plaintext == decrypted, "AES-192 decryption failed"
+        
+        print("✓ AES-128 and AES-192 test passed")
+        return True
+    except Exception as e:
+        print(f"✗ AES-128/192 test failed: {e}")
+        return False
+
+
+def test_cipher_modes():
+    """Test different cipher modes"""
+    print("\nTesting Cipher Modes (ECB, CFB, OFB, CTR, CCM)...")
+    try:
+        key = os.urandom(32)
+        plaintext = b"Test message for cipher modes"
+        
+        # Test ECB (WARNING: ECB is insecure, included only for testing/educational purposes)
+        cipher = Cipher(algorithms.AES(key), modes.ECB(), backend=default_backend())
+        encryptor = cipher.encryptor()
+        padder = crypto_padding.PKCS7(128).padder()
+        padded = padder.update(plaintext) + padder.finalize()
+        ciphertext = encryptor.update(padded) + encryptor.finalize()
+        
+        cipher = Cipher(algorithms.AES(key), modes.ECB(), backend=default_backend())
+        decryptor = cipher.decryptor()
+        padded_decrypted = decryptor.update(ciphertext) + decryptor.finalize()
+        unpadder = crypto_padding.PKCS7(128).unpadder()
+        decrypted = unpadder.update(padded_decrypted) + unpadder.finalize()
+        assert plaintext == decrypted, "ECB mode failed"
+        
+        # Test CFB
+        iv = os.urandom(16)
+        cipher = Cipher(algorithms.AES(key), modes.CFB(iv), backend=default_backend())
+        encryptor = cipher.encryptor()
+        ciphertext = encryptor.update(plaintext) + encryptor.finalize()
+        
+        cipher = Cipher(algorithms.AES(key), modes.CFB(iv), backend=default_backend())
+        decryptor = cipher.decryptor()
+        decrypted = decryptor.update(ciphertext) + decryptor.finalize()
+        assert plaintext == decrypted, "CFB mode failed"
+        
+        # Test OFB
+        iv = os.urandom(16)
+        cipher = Cipher(algorithms.AES(key), modes.OFB(iv), backend=default_backend())
+        encryptor = cipher.encryptor()
+        ciphertext = encryptor.update(plaintext) + encryptor.finalize()
+        
+        cipher = Cipher(algorithms.AES(key), modes.OFB(iv), backend=default_backend())
+        decryptor = cipher.decryptor()
+        decrypted = decryptor.update(ciphertext) + decryptor.finalize()
+        assert plaintext == decrypted, "OFB mode failed"
+        
+        # Test CTR
+        nonce = os.urandom(16)
+        cipher = Cipher(algorithms.AES(key), modes.CTR(nonce), backend=default_backend())
+        encryptor = cipher.encryptor()
+        ciphertext = encryptor.update(plaintext) + encryptor.finalize()
+        
+        cipher = Cipher(algorithms.AES(key), modes.CTR(nonce), backend=default_backend())
+        decryptor = cipher.decryptor()
+        decrypted = decryptor.update(ciphertext) + decryptor.finalize()
+        assert plaintext == decrypted, "CTR mode failed"
+        
+        # Test CCM
+        nonce = os.urandom(13)
+        aesccm = AESCCM(key, tag_length=16)
+        ciphertext = aesccm.encrypt(nonce, plaintext, None)
+        
+        # Decrypt
+        decrypted = aesccm.decrypt(nonce, ciphertext, None)
+        assert plaintext == decrypted, "CCM mode failed"
+        
+        print("✓ Cipher modes test passed")
+        return True
+    except Exception as e:
+        print(f"✗ Cipher modes test failed: {e}")
+        return False
+
+
+def test_mac_functions():
+    """Test MAC functions (CMAC, CBC-MAC, GMAC, HMAC)"""
+    print("\nTesting MAC Functions...")
+    try:
+        key = os.urandom(32)
+        message = b"Test message for MAC"
+        
+        # Test CMAC
+        c = cmac.CMAC(algorithms.AES(key), backend=default_backend())
+        c.update(message)
+        mac_tag = c.finalize()
+        
+        c = cmac.CMAC(algorithms.AES(key), backend=default_backend())
+        c.update(message)
+        c.verify(mac_tag)
+        
+        # Test CBC-MAC
+        iv = bytes(16)
+        cipher = Cipher(algorithms.AES(key), modes.CBC(iv), backend=default_backend())
+        encryptor = cipher.encryptor()
+        padder = crypto_padding.PKCS7(128).padder()
+        padded = padder.update(message) + padder.finalize()
+        ciphertext = encryptor.update(padded) + encryptor.finalize()
+        cbc_mac = ciphertext[-16:]
+        assert len(cbc_mac) == 16, "CBC-MAC length incorrect"
+        
+        # Test GMAC (GCM with empty plaintext)
+        nonce = os.urandom(12)
+        cipher = Cipher(algorithms.AES(key), modes.GCM(nonce), backend=default_backend())
+        encryptor = cipher.encryptor()
+        encryptor.authenticate_additional_data(message)
+        encryptor.finalize()
+        gmac_tag = encryptor.tag
+        
+        cipher = Cipher(algorithms.AES(key), modes.GCM(nonce, gmac_tag), backend=default_backend())
+        decryptor = cipher.decryptor()
+        decryptor.authenticate_additional_data(message)
+        decryptor.finalize()
+        
+        # Test HMAC
+        h = hmac.HMAC(key, hashes.SHA256(), backend=default_backend())
+        h.update(message)
+        hmac_tag = h.finalize()
+        
+        h = hmac.HMAC(key, hashes.SHA256(), backend=default_backend())
+        h.update(message)
+        h.verify(hmac_tag)
+        
+        print("✓ MAC functions test passed")
+        return True
+    except Exception as e:
+        print(f"✗ MAC functions test failed: {e}")
+        return False
+
+
+def test_ecdsa():
+    """Test ECDSA signing and verification"""
+    print("\nTesting ECDSA...")
+    try:
+        message = b"Test message for ECDSA"
+        
+        # Test with P-256
+        private_key = ec.generate_private_key(ec.SECP256R1(), backend=default_backend())
+        public_key = private_key.public_key()
+        
+        signature = private_key.sign(message, ec.ECDSA(hashes.SHA256()))
+        public_key.verify(signature, message, ec.ECDSA(hashes.SHA256()))
+        
+        # Test with P-384
+        private_key = ec.generate_private_key(ec.SECP384R1(), backend=default_backend())
+        public_key = private_key.public_key()
+        
+        signature = private_key.sign(message, ec.ECDSA(hashes.SHA256()))
+        public_key.verify(signature, message, ec.ECDSA(hashes.SHA256()))
+        
+        # Test with P-521
+        private_key = ec.generate_private_key(ec.SECP521R1(), backend=default_backend())
+        public_key = private_key.public_key()
+        
+        signature = private_key.sign(message, ec.ECDSA(hashes.SHA256()))
+        public_key.verify(signature, message, ec.ECDSA(hashes.SHA256()))
+        
+        print("✓ ECDSA test passed")
+        return True
+    except Exception as e:
+        print(f"✗ ECDSA test failed: {e}")
         return False
 
 
@@ -305,6 +516,10 @@ def main():
     tests = [
         test_symmetric_encryption,
         test_symmetric_encryption_gcm,
+        test_aes_128_192,
+        test_cipher_modes,
+        test_mac_functions,
+        test_ecdsa,
         test_rsa_encryption,
         test_digital_signature,
         test_key_serialization,
