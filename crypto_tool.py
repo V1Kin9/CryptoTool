@@ -50,6 +50,8 @@ class CryptoTool(QMainWindow):
         
         # Create tab widget
         tabs = QTabWidget()
+        tabs.setTabPosition(QTabWidget.West)
+        tabs.setMovable(True)
         layout.addWidget(tabs)
         
         # Add tabs for different functions
@@ -104,6 +106,7 @@ class CryptoTool(QMainWindow):
         key_layout.addWidget(self.sym_key_input)
         
         key_btn_layout = QHBoxLayout()
+        key_btn_layout.addStretch()
         gen_key_btn = QPushButton("Generate Key")
         gen_key_btn.clicked.connect(self.generate_symmetric_key)
         key_btn_layout.addWidget(gen_key_btn)
@@ -142,17 +145,17 @@ class CryptoTool(QMainWindow):
         
         # Buttons
         btn_layout = QHBoxLayout()
+        btn_layout.addStretch()
         encrypt_btn = QPushButton("Encrypt")
         encrypt_btn.clicked.connect(self.symmetric_encrypt)
-        btn_layout.addWidget(encrypt_btn)
-        
-        decrypt_btn = QPushButton("Decrypt")
-        decrypt_btn.clicked.connect(self.symmetric_decrypt)
-        btn_layout.addWidget(decrypt_btn)
-        
         clear_btn = QPushButton("Clear")
         clear_btn.clicked.connect(lambda: (self.sym_plaintext.clear(), self.sym_aad_input.clear()))
         btn_layout.addWidget(clear_btn)
+
+        decrypt_btn = QPushButton("Decrypt")
+        decrypt_btn.clicked.connect(self.symmetric_decrypt)
+        btn_layout.addWidget(decrypt_btn)
+        btn_layout.addWidget(encrypt_btn)
         
         layout.addLayout(btn_layout)
         
@@ -212,6 +215,7 @@ class CryptoTool(QMainWindow):
         key_layout.addWidget(self.mac_key_input)
         
         key_btn_layout = QHBoxLayout()
+        key_btn_layout.addStretch()
         gen_key_btn = QPushButton("Generate Key")
         gen_key_btn.clicked.connect(self.generate_mac_key)
         key_btn_layout.addWidget(gen_key_btn)
@@ -250,17 +254,17 @@ class CryptoTool(QMainWindow):
         
         # Buttons
         btn_layout = QHBoxLayout()
+        btn_layout.addStretch()
         compute_btn = QPushButton("Compute MAC")
         compute_btn.clicked.connect(self.compute_mac)
-        btn_layout.addWidget(compute_btn)
-        
-        verify_btn = QPushButton("Verify MAC")
-        verify_btn.clicked.connect(self.verify_mac)
-        btn_layout.addWidget(verify_btn)
-        
         clear_btn = QPushButton("Clear")
         clear_btn.clicked.connect(lambda: (self.mac_message.clear(), self.mac_aad_input.clear()))
         btn_layout.addWidget(clear_btn)
+
+        verify_btn = QPushButton("Verify MAC")
+        verify_btn.clicked.connect(self.verify_mac)
+        btn_layout.addWidget(verify_btn)
+        btn_layout.addWidget(compute_btn)
         
         layout.addLayout(btn_layout)
         
@@ -318,17 +322,17 @@ class CryptoTool(QMainWindow):
         
         # Buttons
         btn_layout = QHBoxLayout()
+        btn_layout.addStretch()
         encrypt_btn = QPushButton("Encrypt (Public Key)")
         encrypt_btn.clicked.connect(self.asymmetric_encrypt)
-        btn_layout.addWidget(encrypt_btn)
-        
-        decrypt_btn = QPushButton("Decrypt (Private Key)")
-        decrypt_btn.clicked.connect(self.asymmetric_decrypt)
-        btn_layout.addWidget(decrypt_btn)
-        
         clear_btn = QPushButton("Clear")
         clear_btn.clicked.connect(lambda: self.asym_message.clear())
         btn_layout.addWidget(clear_btn)
+
+        decrypt_btn = QPushButton("Decrypt (Private Key)")
+        decrypt_btn.clicked.connect(self.asymmetric_decrypt)
+        btn_layout.addWidget(decrypt_btn)
+        btn_layout.addWidget(encrypt_btn)
         
         layout.addLayout(btn_layout)
         
@@ -393,17 +397,17 @@ class CryptoTool(QMainWindow):
         
         # Buttons
         btn_layout = QHBoxLayout()
+        btn_layout.addStretch()
         sign_btn = QPushButton("Sign (Private Key)")
         sign_btn.clicked.connect(self.sign_message)
-        btn_layout.addWidget(sign_btn)
-        
-        verify_btn = QPushButton("Verify (Public Key)")
-        verify_btn.clicked.connect(self.verify_signature)
-        btn_layout.addWidget(verify_btn)
-        
         clear_btn = QPushButton("Clear")
         clear_btn.clicked.connect(lambda: (self.sig_message.clear(), self.sig_signature.clear()))
         btn_layout.addWidget(clear_btn)
+
+        verify_btn = QPushButton("Verify (Public Key)")
+        verify_btn.clicked.connect(self.verify_signature)
+        btn_layout.addWidget(verify_btn)
+        btn_layout.addWidget(sign_btn)
         
         layout.addLayout(btn_layout)
         
@@ -439,7 +443,10 @@ class CryptoTool(QMainWindow):
         
         gen_rsa_btn = QPushButton("Generate RSA Key Pair")
         gen_rsa_btn.clicked.connect(self.generate_rsa_keys)
-        rsa_layout.addWidget(gen_rsa_btn)
+        rsa_action_layout = QHBoxLayout()
+        rsa_action_layout.addStretch()
+        rsa_action_layout.addWidget(gen_rsa_btn)
+        rsa_layout.addLayout(rsa_action_layout)
         
         # Key display
         self.rsa_keys_display = QTextEdit()
@@ -449,21 +456,19 @@ class CryptoTool(QMainWindow):
         
         # Save/Load buttons
         rsa_file_layout = QHBoxLayout()
-        save_priv_btn = QPushButton("Save Private Key")
-        save_priv_btn.clicked.connect(self.save_private_key)
-        rsa_file_layout.addWidget(save_priv_btn)
-        
-        save_pub_btn = QPushButton("Save Public Key")
-        save_pub_btn.clicked.connect(self.save_public_key)
-        rsa_file_layout.addWidget(save_pub_btn)
-        
+        rsa_file_layout.addStretch()
         load_priv_btn = QPushButton("Load Private Key")
         load_priv_btn.clicked.connect(self.load_private_key)
         rsa_file_layout.addWidget(load_priv_btn)
-        
         load_pub_btn = QPushButton("Load Public Key")
         load_pub_btn.clicked.connect(self.load_public_key)
         rsa_file_layout.addWidget(load_pub_btn)
+        save_priv_btn = QPushButton("Save Private Key")
+        save_priv_btn.clicked.connect(self.save_private_key)
+        rsa_file_layout.addWidget(save_priv_btn)
+        save_pub_btn = QPushButton("Save Public Key")
+        save_pub_btn.clicked.connect(self.save_public_key)
+        rsa_file_layout.addWidget(save_pub_btn)
         
         rsa_layout.addLayout(rsa_file_layout)
         layout.addWidget(rsa_group)
@@ -482,7 +487,10 @@ class CryptoTool(QMainWindow):
         
         gen_ec_btn = QPushButton("Generate ECDSA Key Pair")
         gen_ec_btn.clicked.connect(self.generate_ec_keys)
-        ec_layout.addWidget(gen_ec_btn)
+        ec_action_layout = QHBoxLayout()
+        ec_action_layout.addStretch()
+        ec_action_layout.addWidget(gen_ec_btn)
+        ec_layout.addLayout(ec_action_layout)
         
         # EC Key display
         self.ec_keys_display = QTextEdit()
@@ -492,21 +500,19 @@ class CryptoTool(QMainWindow):
         
         # EC Save/Load buttons
         ec_file_layout = QHBoxLayout()
-        save_ec_priv_btn = QPushButton("Save Private Key")
-        save_ec_priv_btn.clicked.connect(self.save_ec_private_key)
-        ec_file_layout.addWidget(save_ec_priv_btn)
-        
-        save_ec_pub_btn = QPushButton("Save Public Key")
-        save_ec_pub_btn.clicked.connect(self.save_ec_public_key)
-        ec_file_layout.addWidget(save_ec_pub_btn)
-        
+        ec_file_layout.addStretch()
         load_ec_priv_btn = QPushButton("Load Private Key")
         load_ec_priv_btn.clicked.connect(self.load_ec_private_key)
         ec_file_layout.addWidget(load_ec_priv_btn)
-        
         load_ec_pub_btn = QPushButton("Load Public Key")
         load_ec_pub_btn.clicked.connect(self.load_ec_public_key)
         ec_file_layout.addWidget(load_ec_pub_btn)
+        save_ec_priv_btn = QPushButton("Save Private Key")
+        save_ec_priv_btn.clicked.connect(self.save_ec_private_key)
+        ec_file_layout.addWidget(save_ec_priv_btn)
+        save_ec_pub_btn = QPushButton("Save Public Key")
+        save_ec_pub_btn.clicked.connect(self.save_ec_public_key)
+        ec_file_layout.addWidget(save_ec_pub_btn)
         
         ec_layout.addLayout(ec_file_layout)
         layout.addWidget(ec_group)
@@ -548,7 +554,10 @@ class CryptoTool(QMainWindow):
         
         gen_dh_btn = QPushButton("Generate DH Key Pair")
         gen_dh_btn.clicked.connect(self.generate_dh_keys)
-        dh_layout.addWidget(gen_dh_btn)
+        dh_action_layout = QHBoxLayout()
+        dh_action_layout.addStretch()
+        dh_action_layout.addWidget(gen_dh_btn)
+        dh_layout.addLayout(dh_action_layout)
         
         # Public key display
         self.dh_public_display = QTextEdit()
@@ -567,7 +576,10 @@ class CryptoTool(QMainWindow):
         
         compute_btn = QPushButton("Compute Shared Secret")
         compute_btn.clicked.connect(self.compute_shared_secret)
-        dh_layout.addWidget(compute_btn)
+        dh_compute_layout = QHBoxLayout()
+        dh_compute_layout.addStretch()
+        dh_compute_layout.addWidget(compute_btn)
+        dh_layout.addLayout(dh_compute_layout)
         
         layout.addWidget(dh_group)
         
@@ -612,13 +624,14 @@ class CryptoTool(QMainWindow):
         
         # Buttons
         btn_layout = QHBoxLayout()
+        btn_layout.addStretch()
         hash_btn = QPushButton("Compute Hash")
         hash_btn.clicked.connect(self.compute_hash)
-        btn_layout.addWidget(hash_btn)
-        
         clear_btn = QPushButton("Clear")
         clear_btn.clicked.connect(lambda: self.hash_input.clear())
         btn_layout.addWidget(clear_btn)
+
+        btn_layout.addWidget(hash_btn)
         
         layout.addLayout(btn_layout)
         
@@ -669,9 +682,15 @@ class CryptoTool(QMainWindow):
         convert_layout.addLayout(target_layout)
         
         # Convert button
+        convert_action_layout = QHBoxLayout()
+        convert_action_layout.addStretch()
         convert_btn = QPushButton("Convert")
         convert_btn.clicked.connect(self.convert_format)
-        convert_layout.addWidget(convert_btn)
+        clear_btn = QPushButton("Clear All")
+        clear_btn.clicked.connect(self.clear_format_fields)
+        convert_action_layout.addWidget(clear_btn)
+        convert_action_layout.addWidget(convert_btn)
+        convert_layout.addLayout(convert_action_layout)
         
         layout.addWidget(convert_group)
         
@@ -688,13 +707,13 @@ class CryptoTool(QMainWindow):
         
         # Prefix buttons
         prefix_btn_layout = QHBoxLayout()
+        prefix_btn_layout.addStretch()
         add_prefix_btn = QPushButton("Add '0x' Prefix")
         add_prefix_btn.clicked.connect(self.add_hex_prefix)
-        prefix_btn_layout.addWidget(add_prefix_btn)
-        
         remove_prefix_btn = QPushButton("Remove '0x' Prefix")
         remove_prefix_btn.clicked.connect(self.remove_hex_prefix)
         prefix_btn_layout.addWidget(remove_prefix_btn)
+        prefix_btn_layout.addWidget(add_prefix_btn)
         
         prefix_layout.addLayout(prefix_btn_layout)
         layout.addWidget(prefix_group)
@@ -707,11 +726,6 @@ class CryptoTool(QMainWindow):
         self.format_output = QTextEdit()
         self.format_output.setReadOnly(True)
         output_layout.addWidget(self.format_output)
-        
-        # Clear button
-        clear_btn = QPushButton("Clear All")
-        clear_btn.clicked.connect(self.clear_format_fields)
-        output_layout.addWidget(clear_btn)
         
         layout.addWidget(output_group)
         
